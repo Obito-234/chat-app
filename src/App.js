@@ -21,7 +21,6 @@ function NewChatModal({ open, onClose, user, onCreated }) {
       let description = desc;
       if (tab === "personal") {
         name = chatName || (user.displayName + " & ...");
-        // description is taken from desc (user input)
       }
       const docRef = await addDoc(collection(db, "conversations"), {
         name,
@@ -236,7 +235,7 @@ function Sidebar({ user, conversations, selectedId, onSelect, theme, onThemeTogg
 
   return (
     <div className="sidebar">
-      <div className="sidebar-header">
+      <div className="sidebar-header sidebar-topbar">
         <span className="sidebar-title">Messages</span>
         <div style={{ position: "relative" }}>
           <img
@@ -271,7 +270,7 @@ function Sidebar({ user, conversations, selectedId, onSelect, theme, onThemeTogg
         </div>
       </div>
       <input className="search-bar" placeholder="Search conversations..." style={{ marginTop: 12 }} />
-      <div className="conversation-list">
+      <div className="conversation-list sidebar-hide-mobile">
         {conversations.map((conv) => {
           let displayName = conv.name;
           if (conv.type === "personal" && Array.isArray(conv.members) && conv.members.length === 2) {
@@ -300,7 +299,6 @@ function Sidebar({ user, conversations, selectedId, onSelect, theme, onThemeTogg
                 <div className="conversation-top">
                   <span className="conversation-name">{displayName}</span>
                   <span className="conversation-time">
-                    {/* Optionally format lastMessageAt here */}
                   </span>
                 </div>
                 <div className="conversation-bottom">
@@ -404,7 +402,6 @@ function MainChat({ selectedConversation, user, userProfiles }) {
     setAutoClear(selectedConversation.autoClear || "none");
   }, [selectedConversation]);
 
-  // Helper to get ms for interval
   function getAutoClearMs(val) {
     if (val === "24h") return 24 * 60 * 60 * 1000;
     if (val === "7d") return 7 * 24 * 60 * 60 * 1000;
@@ -436,7 +433,6 @@ function MainChat({ selectedConversation, user, userProfiles }) {
   // Run auto-clear on chat load and after sending
   useEffect(() => {
     autoClearMessages();
-    // eslint-disable-next-line
   }, [selectedConversation, autoClear]);
 
   useEffect(() => {
@@ -465,25 +461,20 @@ function MainChat({ selectedConversation, user, userProfiles }) {
     return () => unsub();
   }, [selectedConversation, user.uid]);
 
-  // Set typing status in Firestore
   const handleTyping = (e) => {
     setNewMessage(e.target.value);
     if (!selectedConversation) return;
-    // Set typing doc
     setDoc(doc(db, "conversations", selectedConversation.id, "typing", user.uid), {
       uid: user.uid,
       displayName: user.displayName,
       timestamp: Date.now(),
     });
-    // Clear previous timeout
     if (typingTimeout.current) clearTimeout(typingTimeout.current);
-    // Set timeout to remove typing after 1.5s
     typingTimeout.current = setTimeout(() => {
       deleteDoc(doc(db, "conversations", selectedConversation.id, "typing", user.uid));
     }, 1500);
   };
 
-  // Remove typing on blur or send
   const clearTyping = () => {
     if (!selectedConversation) return;
     deleteDoc(doc(db, "conversations", selectedConversation.id, "typing", user.uid));
@@ -518,7 +509,7 @@ function MainChat({ selectedConversation, user, userProfiles }) {
 
   const handleDelete = async () => {
     await deleteDoc(doc(db, "conversations", selectedConversation.id));
-    window.location.reload(); // or trigger a refresh in parent
+    window.location.reload(); 
   };
 
   // Get other user's profile for personal chat
@@ -669,7 +660,6 @@ function MainChat({ selectedConversation, user, userProfiles }) {
               <div className="chat-bubble-wrap">
                 <div className="chat-message-meta">
                   <span className="chat-message-name">{msg.displayName}</span>
-                  {/* Optionally add timestamp formatting here */}
                 </div>
                 <div className="chat-bubble">{msg.text}</div>
               </div>
@@ -719,6 +709,31 @@ function SignInPage() {
   );
 }
 
+function MobileTopBar({ user, onAvatarClick, searchValue, onSearchChange }) {
+  return (
+    <div className="mobile-topbar">
+      <div className="mobile-topbar-row">
+        <span className="sidebar-title">Messages</span>
+        <div style={{ position: "relative" }}>
+          <img
+            src={user.photoURL}
+            alt="avatar"
+            className="sidebar-avatar"
+            onClick={onAvatarClick}
+            style={{ cursor: "pointer", width: 38, height: 38, borderRadius: "50%" }}
+          />
+        </div>
+      </div>
+      <input
+        className="search-bar mobile-search-bar"
+        placeholder="Search conversations..."
+        value={searchValue}
+        onChange={onSearchChange}
+      />
+    </div>
+  );
+}
+
 function App() {
   const [conversations, setConversations] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
@@ -727,7 +742,16 @@ function App() {
   const [showNewChat, setShowNewChat] = useState(false);
   const [showJoinLink, setShowJoinLink] = useState(false);
   const [userProfiles, setUserProfiles] = useState({}); // uid -> profile
+  const [searchValue, setSearchValue] = useState("");
   const selectedConversation = conversations.find((c) => c.id === selectedId);
+
+  // detect mobile view
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 600);
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth <= 600);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   useEffect(() => {
     document.body.className = theme === "dark" ? "theme-dark" : "theme-light";
@@ -740,7 +764,6 @@ function App() {
 
   useEffect(() => {
     if (!user) return;
-    // Save/update user profile in Firestore
     setDoc(doc(db, "users", user.uid), {
       uid: user.uid,
       displayName: user.displayName,
@@ -762,7 +785,6 @@ function App() {
     return () => unsub();
   }, [user]);
 
-  // Fetch and cache user profiles for personal chats
   useEffect(() => {
     async function fetchProfiles() {
       if (!user) return;
@@ -781,7 +803,6 @@ function App() {
       }
     }
     fetchProfiles();
-    // eslint-disable-next-line
   }, [conversations, user]);
 
   const handleThemeToggle = () => setTheme((t) => (t === "dark" ? "light" : "dark"));
@@ -794,18 +815,28 @@ function App() {
       <NewChatModal open={showNewChat} onClose={() => setShowNewChat(false)} user={user} onCreated={setSelectedId} />
       <JoinLinkModal open={showJoinLink} onClose={() => setShowJoinLink(false)} user={user} setSelectedId={setSelectedId} />
       <div className="chat-layout">
-        <Sidebar
-          user={user}
-          conversations={conversations}
-          selectedId={selectedId}
-          onSelect={setSelectedId}
-          theme={theme}
-          onThemeToggle={handleThemeToggle}
-          onSignOut={handleSignOut}
-          onNewChat={() => setShowNewChat(true)}
-          onJoinLink={() => setShowJoinLink(true)}
-          userProfiles={userProfiles}
-        />
+        {!isMobile && (
+          <Sidebar
+            user={user}
+            conversations={conversations}
+            selectedId={selectedId}
+            onSelect={setSelectedId}
+            theme={theme}
+            onThemeToggle={handleThemeToggle}
+            onSignOut={handleSignOut}
+            onNewChat={() => setShowNewChat(true)}
+            onJoinLink={() => setShowJoinLink(true)}
+            userProfiles={userProfiles}
+          />
+        )}
+        {isMobile && (
+          <MobileTopBar
+            user={user}
+            onAvatarClick={() => {}}
+            searchValue={searchValue}
+            onSearchChange={e => setSearchValue(e.target.value)}
+          />
+        )}
         <div className="mainchat">
           <MainChat selectedConversation={selectedConversation} user={user} userProfiles={userProfiles} />
         </div>
